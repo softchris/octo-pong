@@ -3510,7 +3510,65 @@ function showBounceMarker(x, z, isIn) {
   bounceMarker.position.z = z;
   bounceMarkerMat.color.setHex(isIn ? 0x00ff88 : 0xff4444);
   bounceMarkerMat.opacity = 0.9;
-  bounceMarkerTimer = 0.6; // seconds to fade
+  bounceMarkerTimer = 0.6;
+  // Spawn bounce cloud puff
+  spawnBouncePuff(x, TABLE_H + 0.02, z);
+}
+
+// ─── BOUNCE CLOUD PARTICLES ───
+const PUFF_COUNT = 8;
+const puffPool = [];
+const puffGeo = new THREE.SphereGeometry(0.04, 6, 6);
+
+for (let i = 0; i < PUFF_COUNT * 3; i++) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(puffGeo, mat);
+  mesh.visible = false;
+  scene.add(mesh);
+  puffPool.push({ mesh, mat, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0 });
+}
+
+function spawnBouncePuff(x, y, z) {
+  let spawned = 0;
+  for (const p of puffPool) {
+    if (p.life > 0) continue;
+    if (spawned >= PUFF_COUNT) break;
+
+    const angle = (spawned / PUFF_COUNT) * Math.PI * 2 + Math.random() * 0.5;
+    const speed = 0.8 + Math.random() * 1.2;
+    p.mesh.position.set(x, y, z);
+    p.mesh.scale.set(0.6, 0.6, 0.6);
+    p.mesh.visible = true;
+    p.mat.opacity = 0.7;
+    p.mat.color.setHex([0xffffff, 0xffe0b2, 0xe0f7fa, 0xf3e5f5][spawned % 4]);
+    p.vx = Math.cos(angle) * speed;
+    p.vy = 1.5 + Math.random() * 2.0;
+    p.vz = Math.sin(angle) * speed;
+    p.maxLife = 0.35 + Math.random() * 0.2;
+    p.life = p.maxLife;
+    spawned++;
+  }
+}
+
+function updateBouncePuffs(dt) {
+  for (const p of puffPool) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    if (p.life <= 0) {
+      p.mesh.visible = false;
+      p.mat.opacity = 0;
+      continue;
+    }
+    const t = 1 - p.life / p.maxLife; // 0→1
+    p.mesh.position.x += p.vx * dt;
+    p.mesh.position.y += p.vy * dt;
+    p.mesh.position.z += p.vz * dt;
+    p.vy -= 6 * dt; // gravity
+    // Expand and fade
+    const s = 0.6 + t * 1.8;
+    p.mesh.scale.set(s, s, s);
+    p.mat.opacity = 0.7 * (1 - t * t);
+  }
 }
 
 // Ball trail
@@ -5742,6 +5800,9 @@ function updateVisuals(dt) {
     bounceMarkerTimer -= dt;
     bounceMarkerMat.opacity = Math.max(0, bounceMarkerTimer / 0.6) * 0.9;
   }
+
+  // Bounce cloud puffs
+  updateBouncePuffs(dt);
 
   // Ball trail
   trailPoints.pop();
