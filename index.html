@@ -3511,73 +3511,64 @@ function showBounceMarker(x, z, isIn) {
   bounceMarkerMat.color.setHex(isIn ? 0x00ff88 : 0xff4444);
   bounceMarkerMat.opacity = 0.9;
   bounceMarkerTimer = 0.6;
-  // Spawn bounce cloud puff
-  spawnBouncePuff(x, TABLE_H + 0.02, z);
 }
 
-// ─── BOUNCE CLOUD PARTICLES ───
-const PUFF_COUNT = 8;
-const puffPool = [];
-const puffGeo = new THREE.SphereGeometry(0.04, 6, 6);
-
-for (let i = 0; i < PUFF_COUNT * 3; i++) {
-  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
-  const mesh = new THREE.Mesh(puffGeo, mat);
+// ─── RAINBOW COMET TRAIL ───
+const COMET_COUNT = 28;
+const RAINBOW = [
+  0xff0000, 0xff4400, 0xff8800, 0xffcc00,
+  0xffff00, 0xaaff00, 0x44ff00, 0x00ff44,
+  0x00ffaa, 0x00ffff, 0x00aaff, 0x0044ff,
+  0x4400ff, 0x8800ff, 0xcc00ff, 0xff00cc,
+];
+const cometTrail = [];
+const cometGeo = new THREE.SphereGeometry(0.035, 6, 6);
+for (let i = 0; i < COMET_COUNT; i++) {
+  const hue = (i / COMET_COUNT);
+  const color = new THREE.Color().setHSL(hue, 1.0, 0.55);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(cometGeo, mat);
   mesh.visible = false;
   scene.add(mesh);
-  puffPool.push({ mesh, mat, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0 });
+  cometTrail.push({ mesh, mat, x: 0, y: 0, z: 0, age: 99 });
 }
+let cometHead = 0;
+let cometTimer = 0;
+const COMET_INTERVAL = 0.012; // spawn rate (seconds)
+const COMET_LIFETIME = 0.34;
 
-function spawnBouncePuff(x, y, z) {
-  let spawned = 0;
-  for (const p of puffPool) {
-    if (p.life > 0) continue;
-    if (spawned >= PUFF_COUNT) break;
-
-    const angle = (spawned / PUFF_COUNT) * Math.PI * 2 + Math.random() * 0.5;
-    const speed = 0.8 + Math.random() * 1.2;
-    p.mesh.position.set(x, y, z);
-    p.mesh.scale.set(0.6, 0.6, 0.6);
-    p.mesh.visible = true;
-    p.mat.opacity = 0.7;
-    p.mat.color.setHex([0xffffff, 0xffe0b2, 0xe0f7fa, 0xf3e5f5][spawned % 4]);
-    p.vx = Math.cos(angle) * speed;
-    p.vy = 1.5 + Math.random() * 2.0;
-    p.vz = Math.sin(angle) * speed;
-    p.maxLife = 0.35 + Math.random() * 0.2;
-    p.life = p.maxLife;
-    spawned++;
+function updateCometTrail(dt) {
+  cometTimer += dt;
+  // Spawn new comet dot at ball position
+  if (cometTimer >= COMET_INTERVAL) {
+    cometTimer -= COMET_INTERVAL;
+    const c = cometTrail[cometHead];
+    c.x = ballPos.x;
+    c.y = ballPos.y;
+    c.z = ballPos.z;
+    c.age = 0;
+    c.mesh.position.set(c.x, c.y, c.z);
+    c.mesh.visible = true;
+    cometHead = (cometHead + 1) % COMET_COUNT;
+  }
+  // Update all dots
+  for (let i = 0; i < COMET_COUNT; i++) {
+    const c = cometTrail[i];
+    if (c.age > COMET_LIFETIME) { c.mesh.visible = false; continue; }
+    c.age += dt;
+    const t = c.age / COMET_LIFETIME; // 0→1
+    // Shrink and fade
+    const s = 1.0 - t * 0.8;
+    c.mesh.scale.set(s, s, s);
+    c.mat.opacity = (1 - t * t) * 0.85;
+    // Cycle hue over time for shimmer
+    const hue = ((i / COMET_COUNT) + performance.now() * 0.0003) % 1;
+    c.mat.color.setHSL(hue, 1.0, 0.5 + t * 0.15);
   }
 }
 
-function updateBouncePuffs(dt) {
-  for (const p of puffPool) {
-    if (p.life <= 0) continue;
-    p.life -= dt;
-    if (p.life <= 0) {
-      p.mesh.visible = false;
-      p.mat.opacity = 0;
-      continue;
-    }
-    const t = 1 - p.life / p.maxLife; // 0→1
-    p.mesh.position.x += p.vx * dt;
-    p.mesh.position.y += p.vy * dt;
-    p.mesh.position.z += p.vz * dt;
-    p.vy -= 6 * dt; // gravity
-    // Expand and fade
-    const s = 0.6 + t * 1.8;
-    p.mesh.scale.set(s, s, s);
-    p.mat.opacity = 0.7 * (1 - t * t);
-  }
-}
-
-// Ball trail
-const trailPoints = [];
-for (let i = 0; i < 12; i++) trailPoints.push(new THREE.Vector3());
-const trailGeo = new THREE.BufferGeometry().setFromPoints(trailPoints);
-const trailMat = new THREE.LineBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.4 });
-const trail = new THREE.Line(trailGeo, trailMat);
-scene.add(trail);
+// Legacy trail reference for ball effect system
+const trailMat = { color: { setHex: function(){} } };
 
 const BALL_EFFECTS = {
   normal: { color: 0xffaa00, emissive: 0x553300, trail: 0xff8800 },
@@ -5801,13 +5792,8 @@ function updateVisuals(dt) {
     bounceMarkerMat.opacity = Math.max(0, bounceMarkerTimer / 0.6) * 0.9;
   }
 
-  // Bounce cloud puffs
-  updateBouncePuffs(dt);
-
-  // Ball trail
-  trailPoints.pop();
-  trailPoints.unshift(new THREE.Vector3(ballPos.x, ballPos.y, ballPos.z));
-  trailGeo.setFromPoints(trailPoints);
+  // Rainbow comet trail
+  updateCometTrail(dt);
 
   // Forehand/backhand from racket X position
   isForhand = racketPos.x >= 0;
