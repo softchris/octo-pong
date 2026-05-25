@@ -1302,6 +1302,19 @@ const ARENAS = [
     fill: { color: 0xff4fd8, intensity: 0.88, position: [-6, 8, -3] },
     builder: createWorldFinalsArena,
   },
+  {
+    id: 'disco', emoji: '🪩', name: 'Disco Fever', tag: 'Quick Play',
+    description: 'Mirror ball, rainbow spotlights, glowing dance floor — pure party vibes.',
+    preview: ['#0a0020', '#ff0088', '#00ffcc'],
+    background: 0x06060e,
+    fog: { color: 0x08081a, near: 22, far: 65 },
+    floorColor: 0x0a0a1a,
+    tableColor: 0x1a0a3e,
+    ambient: { color: 0x3322aa, intensity: 0.45 },
+    main: { color: 0xff88ff, intensity: 0.9, position: [0, 10, 0] },
+    fill: { color: 0x00ffcc, intensity: 0.6, position: [-5, 6, -4] },
+    builder: createDiscoArena,
+  },
 ];
 
 // Bracket seeding: easier opponents first
@@ -3419,6 +3432,124 @@ function createWorldFinalsArena() {
   });
 
   return group;
+}
+
+// ─── DISCO ARENA ───
+let discoLights = [];
+let discoFloorTiles = [];
+let discoBall = null;
+let discoBallMat = null;
+
+function createDiscoArena() {
+  const group = new THREE.Group();
+  discoLights = [];
+  discoFloorTiles = [];
+
+  // Dark walls
+  group.add(createArenaMesh(22, 6, 0.5, 0x0a0a1a, 0, 3, -13.2, { roughness: 0.9 }));
+  group.add(createArenaMesh(22, 6, 0.5, 0x0a0a1a, 0, 3, 13.2, { roughness: 0.9 }));
+  group.add(createArenaMesh(0.45, 6, 26, 0x08081a, -10.2, 3, 0, { roughness: 0.9 }));
+  group.add(createArenaMesh(0.45, 6, 26, 0x08081a, 10.2, 3, 0, { roughness: 0.9 }));
+
+  // Disco ball (mirror ball above table)
+  const ballGeo = new THREE.SphereGeometry(0.7, 16, 16);
+  discoBallMat = new THREE.MeshStandardMaterial({
+    color: 0xcccccc, roughness: 0.1, metalness: 0.95,
+    emissive: 0x444466, emissiveIntensity: 0.3,
+  });
+  discoBall = new THREE.Mesh(ballGeo, discoBallMat);
+  discoBall.position.set(0, 7.5, 0);
+  group.add(discoBall);
+  // String holding the disco ball
+  group.add(createArenaMesh(0.04, 2.5, 0.04, 0x888888, 0, 8.75, 0, { roughness: 0.3, metalness: 0.5 }));
+
+  // Colored spotlights that rotate/cycle
+  const spotColors = [0xff0044, 0x00ff88, 0x4488ff, 0xff8800, 0xff00ff, 0x00ffff];
+  const spotPositions = [
+    [-6, 9, -6], [6, 9, -6], [-6, 9, 6], [6, 9, 6], [0, 9.5, -8], [0, 9.5, 8],
+  ];
+  spotPositions.forEach((pos, i) => {
+    const spot = new THREE.SpotLight(spotColors[i], 1.8, 35, 0.5, 0.6, 1.0);
+    spot.position.set(pos[0], pos[1], pos[2]);
+    const target = new THREE.Object3D();
+    target.position.set(0, TABLE_H, 0);
+    group.add(target);
+    spot.target = target;
+    spot.castShadow = false;
+    group.add(spot);
+    // Glowing lamp mesh
+    group.add(createArenaMesh(0.3, 0.3, 0.3, spotColors[i], pos[0], pos[1], pos[2], {
+      emissive: spotColors[i], emissiveIntensity: 0.8, castShadow: false, receiveShadow: false,
+    }));
+    discoLights.push({ light: spot, target, baseColor: spotColors[i], basePos: pos, phase: i * Math.PI / 3 });
+  });
+
+  // Checkerboard glowing floor tiles
+  const tileSize = 1.8;
+  const tileColors = [0xff0044, 0x00ff88, 0x4488ff, 0xff8800, 0xff00ff, 0x00ffff, 0xffff00, 0xff4488];
+  for (let tx = -4; tx <= 4; tx++) {
+    for (let tz = -5; tz <= 5; tz++) {
+      const ci = (Math.abs(tx) + Math.abs(tz)) % tileColors.length;
+      const tileMat = new THREE.MeshStandardMaterial({
+        color: tileColors[ci], roughness: 0.4, metalness: 0.2,
+        emissive: tileColors[ci], emissiveIntensity: 0.15,
+      });
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(tileSize - 0.08, 0.05, tileSize - 0.08), tileMat);
+      tile.position.set(tx * tileSize, 0.025, tz * tileSize);
+      tile.receiveShadow = true;
+      group.add(tile);
+      discoFloorTiles.push({ mesh: tile, mat: tileMat, baseColor: tileColors[ci], ix: tx, iz: tz });
+    }
+  }
+
+  // Neon barrier rails
+  const neonColors = [0xff0088, 0x00ffcc, 0x8844ff, 0xff6600];
+  [
+    { x: -6.2, z: 0, w: 0.12, h: 0.8, d: 12.4, color: neonColors[0] },
+    { x: 6.2, z: 0, w: 0.12, h: 0.8, d: 12.4, color: neonColors[1] },
+    { x: 0, z: -6.2, w: 12.4, h: 0.8, d: 0.12, color: neonColors[2] },
+    { x: 0, z: 6.2, w: 12.4, h: 0.8, d: 0.12, color: neonColors[3] },
+  ].forEach(r => {
+    group.add(createArenaMesh(r.w, r.h, r.d, r.color, r.x, 0.4, r.z, {
+      emissive: r.color, emissiveIntensity: 0.55, roughness: 0.2, castShadow: false,
+    }));
+  });
+
+  return group;
+}
+
+function updateDiscoArena(dt) {
+  if (currentArena !== 'disco') return;
+  const t = performance.now() * 0.001;
+
+  // Rotate disco ball
+  if (discoBall) {
+    discoBall.rotation.y += dt * 1.2;
+    discoBall.rotation.x = Math.sin(t * 0.3) * 0.15;
+  }
+
+  // Animate spotlights — sweep targets around
+  for (const dl of discoLights) {
+    const angle = t * 0.8 + dl.phase;
+    dl.target.position.x = Math.sin(angle) * 4;
+    dl.target.position.z = Math.cos(angle * 0.7) * 3;
+    dl.target.position.y = TABLE_H + Math.sin(t * 1.5 + dl.phase) * 0.5;
+    // Pulse intensity
+    dl.light.intensity = 1.4 + Math.sin(t * 2.5 + dl.phase) * 0.8;
+    // Shift hue
+    const hue = ((dl.phase / (Math.PI * 2)) + t * 0.12) % 1;
+    dl.light.color.setHSL(hue, 1.0, 0.5);
+  }
+
+  // Animate floor tiles — wave pattern
+  for (const tile of discoFloorTiles) {
+    const wave = Math.sin(t * 3 + tile.ix * 0.8 + tile.iz * 0.6);
+    const pulse = (wave + 1) * 0.5; // 0→1
+    tile.mat.emissiveIntensity = 0.08 + pulse * 0.45;
+    const hue = ((tile.ix + tile.iz) * 0.08 + t * 0.15) % 1;
+    tile.mat.emissive.setHSL(hue, 1.0, 0.45);
+    tile.mat.color.setHSL(hue, 0.7, 0.15 + pulse * 0.15);
+  }
 }
 
 applyArena(currentArena);
@@ -6062,6 +6193,7 @@ function animate() {
   updateDeadBall(dt);
   updateOpponent(dt);
   updateVisuals(dt);
+  updateDiscoArena(dt);
 
   // ─── CAMERA ───
   if (smashAiming) {
