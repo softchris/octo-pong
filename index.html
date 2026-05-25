@@ -3845,17 +3845,17 @@ function analyzeMotionGesture() {
   // 4) Classify gesture
   const totalSpeed = pathLength / (dt / 1000);
 
-  if (totalSpeed < 1.5 && motionCurvature < 0.15) {
+  if (totalSpeed < 1.0 && motionCurvature < 0.1) {
     // Barely moving — passive block
     motionGesture = 'block';
-  } else if (motionAcceleration > 0.003 && dt < 180) {
-    // Quick snap acceleration in short time — wrist flick
+  } else if (motionAcceleration > 0.008 && dt < 150) {
+    // Very quick snap acceleration — deliberate wrist flick
     motionGesture = 'flick';
-  } else if (motionCurvature > 0.25 && zDir < -0.1) {
-    // Curved motion going forward — topspin loop
+  } else if (motionCurvature > 0.4 && zDir < -0.15) {
+    // Clearly curved motion going forward — topspin loop
     motionGesture = 'loop';
-  } else if (motionCurvature > 0.2 && zDir > 0.05) {
-    // Curved motion pulling back — chop/backspin
+  } else if (motionCurvature > 0.35 && zDir > 0.1) {
+    // Clearly curved motion pulling back — chop/backspin
     motionGesture = 'chop';
   } else {
     motionGesture = 'neutral';
@@ -5101,27 +5101,26 @@ function playerHit() {
 
     if (motionGesture === 'flick') {
       // Wrist flick: snappy, faster, slight extra topspin
-      speedZ *= 1.25;
-      arcY *= 0.7; // flatter trajectory
-      gestureSpin.z = -0.6 * spinBoost;
+      speedZ *= 1.15;
+      arcY *= 0.8; // flatter trajectory
+      gestureSpin.z = -0.4 * spinBoost;
       gestureLabel = '⚡ Flick!';
     } else if (motionGesture === 'loop') {
-      // Topspin loop: curved upward motion, heavy topspin + extra arc
-      arcY += 0.6;
-      gestureSpin.z = -(1.0 + power * 0.8) * spinBoost;
-      // Loop curvature adds a bit of sidespin too
-      gestureSpin.x = motionCurvature * 0.5 * Math.sign(clampedVelX || 1) * spinBoost;
+      // Topspin loop: extra topspin, modest arc boost
+      arcY += 0.3;
+      gestureSpin.z = -(0.8 + power * 0.5) * spinBoost;
+      gestureSpin.x = motionCurvature * 0.3 * Math.sign(clampedVelX || 1) * spinBoost;
       gestureLabel = '🔄 Loop!';
     } else if (motionGesture === 'chop') {
-      // Chop: pulling back, heavy backspin regardless of spin setting
-      arcY += 0.4;
-      speedZ *= 0.75;
-      gestureSpin.z = (1.2 + power * 0.6) * spinBoost;
+      // Chop: pulling back, backspin, slower
+      arcY += 0.2;
+      speedZ *= 0.8;
+      gestureSpin.z = (0.8 + power * 0.4) * spinBoost;
       gestureLabel = '↩️ Chop!';
     } else if (motionGesture === 'block') {
-      // Passive block: minimal movement, ball just comes back softly
-      speedZ *= 0.6;
-      arcY = Math.max(0.8, arcY * 0.5);
+      // Passive block: ball just comes back softly
+      speedZ *= 0.65;
+      arcY = Math.max(0.6, arcY * 0.5);
       gestureLabel = '🛡️ Block';
     }
 
