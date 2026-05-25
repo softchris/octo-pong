@@ -5321,13 +5321,15 @@ function animate() {
   // ─── Smash opportunity detection ───
   if (smashPromptCooldown > 0) smashPromptCooldown -= realDt;
   if (gameState === 'play' && !smashPromptActive && !smashAutopilot && !smashAiming && smashPromptCooldown <= 0) {
-    // Ball must be well above net, coming toward player, on player's side
+    // Ball must be above net, on player's side, post-bounce, near peak height
     const netTop = TABLE_H + NET_H;
-    const highEnough = ballPos.y > netTop + 0.15; // detect smash earlier
+    const highEnough = ballPos.y > netTop + 0.15;
     const comingToPlayer = ballVel.z > 0;
-    const onPlayerSide = ballPos.z > -0.5; // detect earlier, even as ball crosses net
-    const notTooFast = Math.abs(ballVel.z) < 8; // wider window to react
-    if (highEnough && comingToPlayer && onPlayerSide && notTooFast) {
+    const onPlayerSide = ballPos.z > 0.5; // must have crossed net and be on our side
+    const notTooFast = Math.abs(ballVel.z) < 8;
+    // Near peak: ball going up slowly or just started descending (post-bounce arc top)
+    const nearPeak = ballVel.y < 1.5; // not rocketing upward — near or past apex
+    if (highEnough && comingToPlayer && onPlayerSide && notTooFast && nearPeak) {
       showSmashPrompt();
     }
   }
