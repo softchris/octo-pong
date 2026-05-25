@@ -1315,6 +1315,45 @@ const ARENAS = [
     fill: { color: 0x00ffcc, intensity: 0.6, position: [-5, 6, -4] },
     builder: createDiscoArena,
   },
+  {
+    id: 'beach', emoji: '🏖️', name: 'Beach', tag: 'Quick Play',
+    description: 'Golden sand, ocean breeze, palm trees, and a warm sunset glow.',
+    preview: ['#f4a460', '#ff7043', '#87ceeb'],
+    background: 0x1a3550,
+    fog: { color: 0x2a4a6a, near: 30, far: 85 },
+    floorColor: 0xd2b48c,
+    tableColor: 0x1a6040,
+    ambient: { color: 0xffe0b2, intensity: 0.75 },
+    main: { color: 0xffd54f, intensity: 1.4, position: [8, 12, -10] },
+    fill: { color: 0xff7043, intensity: 0.5, position: [-6, 5, 6] },
+    builder: createBeachArena,
+  },
+  {
+    id: 'dojo', emoji: '🏯', name: 'Dojo', tag: 'Quick Play',
+    description: 'Tatami floors, paper screens, bamboo accents — focus and discipline.',
+    preview: ['#3e2723', '#8d6e63', '#ffccbc'],
+    background: 0x1a120c,
+    fog: { color: 0x22180e, near: 24, far: 60 },
+    floorColor: 0x8d7553,
+    tableColor: 0x1b3320,
+    ambient: { color: 0xffd8b5, intensity: 0.6 },
+    main: { color: 0xfff3e0, intensity: 1.1, position: [0, 10, 3] },
+    fill: { color: 0xffab91, intensity: 0.35, position: [-5, 5, -5] },
+    builder: createDojoArena,
+  },
+  {
+    id: 'arcade', emoji: '🕹️', name: 'Arcade', tag: 'Quick Play',
+    description: 'Neon cabinets, pixel glow, synthwave vibes — insert coin to play.',
+    preview: ['#0d0030', '#ff00ff', '#00ffff'],
+    background: 0x08001a,
+    fog: { color: 0x0a0020, near: 20, far: 55 },
+    floorColor: 0x120830,
+    tableColor: 0x0a1848,
+    ambient: { color: 0x5522aa, intensity: 0.5 },
+    main: { color: 0xff44ff, intensity: 1.0, position: [3, 10, 4] },
+    fill: { color: 0x00ffff, intensity: 0.7, position: [-5, 6, -5] },
+    builder: createArcadeArena,
+  },
 ];
 
 // Bracket seeding: easier opponents first
@@ -1362,6 +1401,15 @@ const BADGES = {
   firstSpecial:   { id: 'firstSpecial',   emoji: '⚡', name: 'Special Talent',      desc: 'Unlock your first special shot' },
   allSpecials:    { id: 'allSpecials',    emoji: '🌈', name: 'Full Arsenal',        desc: 'Unlock all special shots' },
   trainingComplete: { id: 'trainingComplete', emoji: '🎓', name: 'Graduate',      desc: 'Complete all training lessons' },
+  arenaGarage:    { id: 'arenaGarage',    emoji: '🔧', name: 'Garage Hero',        desc: 'Win a match in the Garage' },
+  arenaGym:       { id: 'arenaGym',       emoji: '🏫', name: 'Gym Rat',            desc: 'Win a match in the School Gym' },
+  arenaClub:      { id: 'arenaClub',      emoji: '🎶', name: 'Club Regular',       desc: 'Win a match in the Club Arena' },
+  arenaRooftop:   { id: 'arenaRooftop',   emoji: '🌆', name: 'Sky Player',         desc: 'Win a match on the Rooftop' },
+  arenaDisco:     { id: 'arenaDisco',     emoji: '🪩', name: 'Disco King',         desc: 'Win a match in Disco Fever' },
+  arenaBeach:     { id: 'arenaBeach',     emoji: '🏖️', name: 'Beach Bum',          desc: 'Win a match at the Beach' },
+  arenaDojo:      { id: 'arenaDojo',      emoji: '🥋', name: 'Sensei',             desc: 'Win a match in the Dojo' },
+  arenaArcade:    { id: 'arenaArcade',    emoji: '🕹️', name: 'Quarter Muncher',    desc: 'Win a match in the Arcade' },
+  arenaAllQP:     { id: 'arenaAllQP',     emoji: '🌍', name: 'World Traveler',     desc: 'Win in every Quick Play arena' },
 };
 
 let playerStats = { ...DEFAULT_PLAYER_STATS };
@@ -1511,6 +1559,9 @@ const BADGE_XP = {
   spinMaster: 80, backspinPro: 80, giantKiller: 120,
   aceCollector: 80, marathonMan: 80, firstSpecial: 50, allSpecials: 200,
   trainingComplete: 100,
+  arenaGarage: 60, arenaGym: 60, arenaClub: 60, arenaRooftop: 60,
+  arenaDisco: 80, arenaBeach: 60, arenaDojo: 80, arenaArcade: 80,
+  arenaAllQP: 200,
 };
 
 function awardBadge(badgeId) {
@@ -1590,6 +1641,17 @@ function checkWinBadges() {
   // Spin-only badges
   if (matchSpinsUsed.size === 1 && matchSpinsUsed.has('top')) awardBadge('spinMaster');
   if (matchSpinsUsed.size === 1 && matchSpinsUsed.has('back')) awardBadge('backspinPro');
+
+  // Arena badges — win in each arena
+  const arenaBadgeMap = {
+    garage: 'arenaGarage', gym: 'arenaGym', club: 'arenaClub',
+    rooftop: 'arenaRooftop', disco: 'arenaDisco',
+    beach: 'arenaBeach', dojo: 'arenaDojo', arcade: 'arenaArcade',
+  };
+  if (arenaBadgeMap[currentArena]) awardBadge(arenaBadgeMap[currentArena]);
+  // World Traveler — won in all quick play arenas
+  const qpArenaIds = ['arenaGarage', 'arenaGym', 'arenaClub', 'arenaRooftop', 'arenaDisco', 'arenaBeach', 'arenaDojo', 'arenaArcade'];
+  if (qpArenaIds.every(id => unlockedBadges.includes(id))) awardBadge('arenaAllQP');
 }
 
 function checkLevelBadges() {
@@ -3549,6 +3611,215 @@ function updateDiscoArena(dt) {
     const hue = ((tile.ix + tile.iz) * 0.08 + t * 0.15) % 1;
     tile.mat.emissive.setHSL(hue, 1.0, 0.45);
     tile.mat.color.setHSL(hue, 0.7, 0.15 + pulse * 0.15);
+  }
+}
+
+// ─── BEACH ARENA ───
+function createBeachArena() {
+  const group = new THREE.Group();
+
+  // Sand floor — large plane
+  const sandMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.95, metalness: 0 });
+  const sand = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), sandMat);
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.y = -0.01;
+  sand.receiveShadow = true;
+  group.add(sand);
+
+  // Ocean backdrop
+  const oceanMat = new THREE.MeshStandardMaterial({ color: 0x1a7ab5, roughness: 0.3, emissive: 0x0a3050, emissiveIntensity: 0.2 });
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(50, 20), oceanMat);
+  ocean.rotation.x = -Math.PI / 2;
+  ocean.position.set(0, -0.05, -22);
+  group.add(ocean);
+
+  // Palm trees
+  [[-7, -8], [7, -8], [-9, 6], [9, 6]].forEach(([px, pz]) => {
+    // Trunk
+    group.add(createArenaMesh(0.25, 4, 0.25, 0x8B6914, px, 2, pz, { roughness: 0.9, metalness: 0 }));
+    // Leaves — clusters of angled green boxes
+    for (let a = 0; a < 5; a++) {
+      const angle = (a / 5) * Math.PI * 2;
+      const lx = px + Math.cos(angle) * 1.2;
+      const lz = pz + Math.sin(angle) * 1.2;
+      group.add(createArenaMesh(0.8, 0.08, 0.35, 0x228B22, lx, 4.2, lz, {
+        emissive: 0x114411, emissiveIntensity: 0.15, rotZ: Math.cos(angle) * 0.4, rotX: Math.sin(angle) * 0.4,
+      }));
+    }
+  });
+
+  // Sunset backdrop — glowing horizon
+  group.add(createArenaMesh(40, 8, 0.3, 0xff7043, 0, 4, -24, { emissive: 0xff5722, emissiveIntensity: 0.25, castShadow: false }));
+  group.add(createArenaMesh(40, 4, 0.3, 0xffd54f, 0, 9, -24, { emissive: 0xffab00, emissiveIntensity: 0.15, castShadow: false }));
+
+  // Beach umbrellas
+  [[-5, 4], [5, 4]].forEach(([ux, uz]) => {
+    group.add(createArenaMesh(0.1, 2.5, 0.1, 0x8B6914, ux, 1.25, uz, { roughness: 0.8 }));
+    group.add(createArenaMesh(1.8, 0.08, 1.8, 0xff4444, ux, 2.6, uz, { emissive: 0x881111, emissiveIntensity: 0.15 }));
+  });
+
+  group.add(createSpotlightRig([
+    { color: 0xffd54f, intensity: 1.2, position: [-6, 9, -7], angle: 0.45, distance: 30 },
+    { color: 0xff7043, intensity: 0.9, position: [6, 9, -7], angle: 0.42, distance: 30 },
+    { color: 0xffd54f, intensity: 1.0, position: [0, 10, 8], angle: 0.45, distance: 30 },
+  ]));
+
+  return group;
+}
+
+// ─── DOJO ARENA ───
+function createDojoArena() {
+  const group = new THREE.Group();
+
+  // Tatami floor — warm brown panels
+  for (let tx = -3; tx <= 3; tx++) {
+    for (let tz = -4; tz <= 4; tz++) {
+      const isAlt = (tx + tz) % 2 === 0;
+      const color = isAlt ? 0x9e8c6c : 0x8b7a58;
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0 });
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.04, 2.2), mat);
+      tile.position.set(tx * 2.3, 0.02, tz * 2.3);
+      tile.receiveShadow = true;
+      group.add(tile);
+    }
+  }
+
+  // Paper screen walls (shoji)
+  const screenColor = 0xfff5e6;
+  [-12, 12].forEach(z => {
+    group.add(createArenaMesh(20, 5, 0.15, screenColor, 0, 2.5, z, { roughness: 0.95, emissive: 0xfff0d0, emissiveIntensity: 0.08 }));
+    // Dark grid lines on screens
+    for (let i = -3; i <= 3; i++) {
+      group.add(createArenaMesh(0.06, 5, 0.02, 0x3e2723, i * 2.5, 2.5, z + (z > 0 ? -0.09 : 0.09), { castShadow: false }));
+    }
+    group.add(createArenaMesh(20, 0.06, 0.02, 0x3e2723, 0, 2.5, z + (z > 0 ? -0.09 : 0.09), { castShadow: false }));
+  });
+
+  // Side walls — dark wood
+  [-10, 10].forEach(x => {
+    group.add(createArenaMesh(0.3, 5, 24, 0x3e2723, x, 2.5, 0, { roughness: 0.85 }));
+  });
+
+  // Bamboo decorations
+  [[-8, -9], [-8, 9], [8, -9], [8, 9]].forEach(([bx, bz]) => {
+    for (let i = 0; i < 3; i++) {
+      const ox = bx + (i - 1) * 0.2;
+      group.add(createArenaMesh(0.08, 4.5, 0.08, 0x4a7c3f, ox, 2.25, bz, { roughness: 0.7 }));
+      // Bamboo joints
+      group.add(createArenaMesh(0.12, 0.06, 0.12, 0x3a6830, ox, 1.5, bz, { castShadow: false }));
+      group.add(createArenaMesh(0.12, 0.06, 0.12, 0x3a6830, ox, 3.0, bz, { castShadow: false }));
+    }
+  });
+
+  // Torii-style gate behind opponent
+  group.add(createArenaMesh(0.2, 3.5, 0.2, 0xcc3333, -3, 1.75, -11, { roughness: 0.6 }));
+  group.add(createArenaMesh(0.2, 3.5, 0.2, 0xcc3333, 3, 1.75, -11, { roughness: 0.6 }));
+  group.add(createArenaMesh(7, 0.25, 0.25, 0xcc3333, 0, 3.5, -11, { roughness: 0.5 }));
+  group.add(createArenaMesh(6, 0.18, 0.2, 0xcc3333, 0, 2.8, -11, { roughness: 0.5 }));
+
+  // Lanterns
+  [[-5, -6], [5, -6], [-5, 6], [5, 6]].forEach(([lx, lz]) => {
+    group.add(createArenaMesh(0.06, 1.5, 0.06, 0x3e2723, lx, 0.75, lz, { roughness: 0.8 }));
+    group.add(createArenaMesh(0.4, 0.6, 0.4, 0xffcc80, lx, 1.8, lz, {
+      emissive: 0xff9900, emissiveIntensity: 0.5, roughness: 0.4, castShadow: false,
+    }));
+    const lanternLight = new THREE.PointLight(0xff9944, 0.6, 8, 1.5);
+    lanternLight.position.set(lx, 1.8, lz);
+    group.add(lanternLight);
+  });
+
+  group.add(createSpotlightRig([
+    { color: 0xfff3e0, intensity: 1.0, position: [-5, 9, -6], angle: 0.42, distance: 28 },
+    { color: 0xffe0b2, intensity: 0.8, position: [5, 9, -6], angle: 0.4, distance: 28 },
+    { color: 0xfff3e0, intensity: 0.9, position: [0, 10, 7], angle: 0.44, distance: 30 },
+  ]));
+
+  return group;
+}
+
+// ─── ARCADE ARENA ───
+let arcadeCabinets = [];
+
+function createArcadeArena() {
+  const group = new THREE.Group();
+  arcadeCabinets = [];
+
+  // Dark walls with neon trim
+  group.add(createArenaMesh(22, 5.5, 0.5, 0x0a0020, 0, 2.75, -13, { roughness: 0.9 }));
+  group.add(createArenaMesh(22, 5.5, 0.5, 0x0a0020, 0, 2.75, 13, { roughness: 0.9 }));
+  group.add(createArenaMesh(0.45, 5.5, 26, 0x0a0018, -10.2, 2.75, 0, { roughness: 0.9 }));
+  group.add(createArenaMesh(0.45, 5.5, 26, 0x0a0018, 10.2, 2.75, 0, { roughness: 0.9 }));
+
+  // Neon wall strips
+  const neons = [
+    { w: 22, h: 0.15, d: 0.1, x: 0, y: 0.5, z: -12.7, color: 0xff00ff },
+    { w: 22, h: 0.15, d: 0.1, x: 0, y: 2.5, z: -12.7, color: 0x00ffff },
+    { w: 22, h: 0.15, d: 0.1, x: 0, y: 4.5, z: -12.7, color: 0xff00ff },
+    { w: 22, h: 0.15, d: 0.1, x: 0, y: 0.5, z: 12.7, color: 0x00ffff },
+    { w: 22, h: 0.15, d: 0.1, x: 0, y: 2.5, z: 12.7, color: 0xff00ff },
+  ];
+  neons.forEach(n => {
+    group.add(createArenaMesh(n.w, n.h, n.d, n.color, n.x, n.y, n.z, {
+      emissive: n.color, emissiveIntensity: 0.6, castShadow: false,
+    }));
+  });
+
+  // Arcade cabinets along walls
+  const cabinetColors = [0xff0044, 0x00ff88, 0x4488ff, 0xff8800, 0xff00ff, 0x00ffff, 0xffff00, 0x88ff00];
+  const cabinetPositions = [
+    [-8.5, -11.5], [-5.5, -11.5], [-2.5, -11.5], [2.5, -11.5], [5.5, -11.5], [8.5, -11.5],
+    [-8.5, 11.5], [-5.5, 11.5], [5.5, 11.5], [8.5, 11.5],
+  ];
+  cabinetPositions.forEach(([cx, cz], i) => {
+    const color = cabinetColors[i % cabinetColors.length];
+    // Cabinet body
+    group.add(createArenaMesh(1.2, 2.2, 0.8, 0x1a1a2e, cx, 1.1, cz, { roughness: 0.7 }));
+    // Screen
+    const screenMat = new THREE.MeshStandardMaterial({
+      color, roughness: 0.2, emissive: color, emissiveIntensity: 0.4,
+    });
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.05), screenMat);
+    screen.position.set(cx, 1.6, cz + (cz > 0 ? -0.42 : 0.42));
+    group.add(screen);
+    arcadeCabinets.push({ mesh: screen, mat: screenMat, baseColor: color });
+  });
+
+  // Checkered neon floor
+  for (let fx = -5; fx <= 5; fx++) {
+    for (let fz = -6; fz <= 6; fz++) {
+      if (Math.abs(fx) <= 2 && Math.abs(fz) <= 3) continue; // skip under table
+      const dark = (fx + fz) % 2 === 0;
+      const color = dark ? 0x0a0020 : 0x180040;
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: dark ? 0x220044 : 0x110022, emissiveIntensity: 0.08 });
+      const tile = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.7), mat);
+      tile.position.set(fx * 1.8, 0.02, fz * 1.8);
+      tile.receiveShadow = true;
+      group.add(tile);
+    }
+  }
+
+  // "INSERT COIN" sign
+  group.add(createArenaMesh(4, 0.8, 0.12, 0xff00ff, 0, 4.8, -12.85, {
+    emissive: 0xff00ff, emissiveIntensity: 0.65, castShadow: false,
+  }));
+
+  group.add(createSpotlightRig([
+    { color: 0xff00ff, intensity: 1.2, position: [-6, 8.5, -7], angle: 0.42, distance: 30 },
+    { color: 0x00ffff, intensity: 1.2, position: [6, 8.5, -7], angle: 0.42, distance: 30 },
+    { color: 0xff44ff, intensity: 1.0, position: [0, 9, 8], angle: 0.45, distance: 30 },
+  ]));
+
+  return group;
+}
+
+function updateArcadeArena(dt) {
+  if (currentArena !== 'arcade') return;
+  const t = performance.now() * 0.001;
+  // Pulse cabinet screens
+  for (let i = 0; i < arcadeCabinets.length; i++) {
+    const cab = arcadeCabinets[i];
+    const pulse = (Math.sin(t * 2.5 + i * 1.2) + 1) * 0.5;
+    cab.mat.emissiveIntensity = 0.25 + pulse * 0.45;
   }
 }
 
@@ -6194,6 +6465,7 @@ function animate() {
   updateOpponent(dt);
   updateVisuals(dt);
   updateDiscoArena(dt);
+  updateArcadeArena(dt);
 
   // ─── CAMERA ───
   if (smashAiming) {
