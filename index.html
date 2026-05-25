@@ -4006,63 +4006,145 @@ function trainingShowMe() {
   trainingPhase = 'showme';
   trainingAutoRacket = true;
   renderTrainingHUD();
-  // Feed a ball and let the game auto-play the stroke
+  // Slow motion for demo
+  gameTimeScale = 0.3;
   feedTrainingBall();
   const lesson = TRAINING_LESSONS[trainingLessonIndex];
-  // Schedule the auto-hit after ball reaches player side
+  // Wait for ball to arrive on player side, then animate the stroke
   trainingDemoTimer = setTimeout(() => {
-    performDemoStroke(lesson.id);
-  }, 800);
+    animateDemoStroke(lesson.id);
+  }, 1200);
 }
 
-function performDemoStroke(gestureId) {
+// Demo trail — a glowing line showing the racket path
+let demoTrailPoints = [];
+let demoTrailLine = null;
+
+function createDemoTrail() {
+  if (demoTrailLine) { scene.remove(demoTrailLine); demoTrailLine = null; }
+  demoTrailPoints = [];
+  const geo = new THREE.BufferGeometry();
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ddff, transparent: true, opacity: 0.9, linewidth: 2 });
+  demoTrailLine = new THREE.Line(geo, mat);
+  scene.add(demoTrailLine);
+}
+
+function updateDemoTrail(x, y, z) {
+  demoTrailPoints.push(new THREE.Vector3(x, y, z));
+  if (demoTrailLine && demoTrailPoints.length >= 2) {
+    demoTrailLine.geometry.dispose();
+    demoTrailLine.geometry = new THREE.BufferGeometry().setFromPoints(demoTrailPoints);
+  }
+}
+
+function fadeDemoTrail() {
+  if (!demoTrailLine) return;
+  let opacity = 0.9;
+  const fade = setInterval(() => {
+    opacity -= 0.05;
+    if (opacity <= 0) {
+      clearInterval(fade);
+      if (demoTrailLine) { scene.remove(demoTrailLine); demoTrailLine = null; }
+      demoTrailPoints = [];
+    } else {
+      demoTrailLine.material.opacity = opacity;
+    }
+  }, 50);
+}
+
+function animateDemoStroke(gestureId) {
   if (!trainingActive || trainingPhase !== 'showme') return;
   const lesson = TRAINING_LESSONS.find(l => l.id === gestureId);
 
-  // Move racket to ball
-  racketPos.x = ballPos.x;
-  racketPos.z = Math.max(ballPos.z, 0.5);
+  // Define waypoints for the racket path based on gesture
+  // All paths start near the ball and trace the motion pattern
+  const bx = ballPos.x;
+  const bz = Math.max(ballPos.z, 0.8);
+  const by = TABLE_H + 0.35;
+  let waypoints = [];
 
-  // Simulate the gesture motion visually
   if (gestureId === 'block') {
-    // Barely move — just place racket
-    racketSpeed = 0.5;
-    racketInstantSpeed = 0.5;
-    racketVelX = 0; racketVelZ = 0;
-    showGestureCallout('🛡️ Block');
+    // Barely move — racket stays in place
+    waypoints = [
+      { x: bx, y: by, z: bz + 0.3 },
+      { x: bx, y: by, z: bz + 0.1 },
+      { x: bx, y: by, z: bz },
+    ];
   } else if (gestureId === 'flick') {
-    // Quick lateral snap
-    racketSpeed = 8;
-    racketInstantSpeed = 8;
-    racketVelX = 10; racketVelZ = -3;
-    showGestureCallout('⚡ Flick!');
+    // Short quick lateral snap
+    waypoints = [
+      { x: bx - 0.4, y: by, z: bz + 0.2 },
+      { x: bx - 0.15, y: by + 0.05, z: bz + 0.1 },
+      { x: bx, y: by, z: bz },
+      { x: bx + 0.4, y: by - 0.05, z: bz - 0.15 },
+    ];
   } else if (gestureId === 'loop') {
-    // Forward curving motion
-    racketSpeed = 5;
-    racketInstantSpeed = 5;
-    racketVelX = 2; racketVelZ = -6;
-    showGestureCallout('🔄 Loop!');
+    // Upward curve forward — semi-circular arc
+    waypoints = [
+      { x: bx, y: by - 0.15, z: bz + 0.5 },
+      { x: bx + 0.1, y: by, z: bz + 0.3 },
+      { x: bx + 0.15, y: by + 0.2, z: bz + 0.1 },
+      { x: bx + 0.1, y: by + 0.25, z: bz - 0.1 },
+      { x: bx, y: by + 0.15, z: bz - 0.3 },
+    ];
   } else if (gestureId === 'chop') {
-    // Pulling back motion
-    racketSpeed = 4;
-    racketInstantSpeed = 4;
-    racketVelX = 1; racketVelZ = 4;
-    showGestureCallout('↩️ Chop!');
+    // Downward curve pulling back
+    waypoints = [
+      { x: bx, y: by + 0.25, z: bz - 0.2 },
+      { x: bx + 0.1, y: by + 0.1, z: bz },
+      { x: bx + 0.05, y: by, z: bz + 0.15 },
+      { x: bx, y: by - 0.1, z: bz + 0.35 },
+      { x: bx - 0.05, y: by - 0.15, z: bz + 0.5 },
+    ];
   }
 
-  // Force the gesture type for the demo hit
-  motionGesture = gestureId;
-  playerHit();
+  createDemoTrail();
+  let step = 0;
+  const stepTime = 120; // ms per waypoint — slow enough to watch
+  const hitStep = gestureId === 'block' ? waypoints.length - 1 : Math.floor(waypoints.length * 0.6);
+  let hasHit = false;
 
-  showTrainingResult('👀 ' + lesson.emoji + ' ' + lesson.name);
+  const anim = setInterval(() => {
+    if (step >= waypoints.length) {
+      clearInterval(anim);
+      showGestureCallout(lesson.emoji + ' ' + lesson.name);
+      // Fade trail, then return to intro
+      setTimeout(() => {
+        fadeDemoTrail();
+        gameTimeScale = 1.0;
+        trainingAutoRacket = false;
+        trainingPhase = 'intro';
+        gameState = 'point-pause';
+        renderTrainingHUD();
+      }, 1500);
+      return;
+    }
 
-  // After demo, go back to intro (or try if they already saw it)
-  setTimeout(() => {
-    trainingAutoRacket = false;
-    trainingPhase = 'intro';
-    gameState = 'point-pause';
-    renderTrainingHUD();
-  }, 2000);
+    const wp = waypoints[step];
+    racketPos.x = wp.x;
+    racketPos.z = wp.z;
+    updateDemoTrail(wp.x, wp.y, wp.z);
+
+    // Hit the ball at the right step
+    if (step === hitStep && !hasHit) {
+      hasHit = true;
+      if (gestureId === 'block') {
+        racketSpeed = 0.5; racketVelX = 0; racketVelZ = 0;
+      } else if (gestureId === 'flick') {
+        racketSpeed = 8; racketVelX = 10; racketVelZ = -3;
+      } else if (gestureId === 'loop') {
+        racketSpeed = 5; racketVelX = 2; racketVelZ = -6;
+      } else if (gestureId === 'chop') {
+        racketSpeed = 4; racketVelX = 1; racketVelZ = 4;
+      }
+      racketInstantSpeed = racketSpeed;
+      motionGesture = gestureId;
+      playerHit();
+      showTrainingResult(lesson.emoji + ' ' + lesson.name + '!');
+    }
+
+    step++;
+  }, stepTime);
 }
 
 function trainingStartTry() {
