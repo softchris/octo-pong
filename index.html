@@ -1595,7 +1595,7 @@ function acceptSmash() {
   // Enter aiming mode — full pause, zoom in to opponent table
   gameTimeScale = 0;
   smashAiming = true;
-  smashPromptCooldown = 4.0;
+  smashPromptCooldown = 6.0;
   document.getElementById('smash-aim-overlay').style.display = 'block';
 }
 
@@ -1611,7 +1611,7 @@ function declineSmash() {
     window._smashFrozenBall = null;
   }
   gameTimeScale = 1.0;
-  smashPromptCooldown = 3.0;
+  smashPromptCooldown = 6.0;
 }
 
 // Smash aiming — raycast screen tap to opponent table half
@@ -1703,7 +1703,7 @@ function executeAimedSmash() {
       overlay.style.display = 'none';
       document.getElementById('smash-reticle').style.display = 'none';
       gameTimeScale = 1.0;
-      smashPromptCooldown = 3.0;
+      smashPromptCooldown = 6.0;
     });
   }
   
@@ -5509,12 +5509,11 @@ function animate() {
   if (gameState === 'play' && !smashPromptActive && !smashAutopilot && !smashAiming && smashPromptCooldown <= 0) {
     // Ball must be above net, on player's side, post-bounce, near peak height
     const netTop = TABLE_H + NET_H;
-    const highEnough = ballPos.y > netTop + 0.15;
+    const highEnough = ballPos.y > netTop + 0.4; // must be well above net
     const comingToPlayer = ballVel.z > 0;
-    const onPlayerSide = ballPos.z > 0.5; // must have crossed net and be on our side
-    const notTooFast = Math.abs(ballVel.z) < 8;
-    // Near peak: ball going up slowly or just started descending (post-bounce arc top)
-    const nearPeak = ballVel.y < 1.5; // not rocketing upward — near or past apex
+    const onPlayerSide = ballPos.z > 0.5;
+    const notTooFast = Math.abs(ballVel.z) < 6;
+    const nearPeak = ballVel.y < 0.8 && ballVel.y > -3; // at apex of arc
     if (highEnough && comingToPlayer && onPlayerSide && notTooFast && nearPeak) {
       showSmashPrompt();
     }
