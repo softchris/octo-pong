@@ -4964,9 +4964,12 @@ function updateBall(dt) {
   const onTableNow = Math.abs(ballPos.x) <= TABLE_W / 2 && Math.abs(ballPos.z) <= TABLE_L / 2;
   const wasAboveTable = prevY >= tableY;
   const nowBelowTable = ballPos.y <= tableY;
-  // Also check if previous position was within table bounds (for fast diagonal shots)
-  const onTablePrev = Math.abs(prevX) <= TABLE_W / 2 && Math.abs(prevZ) <= TABLE_L / 2;
-  const tableBounce = ballVel.y < 0 && wasAboveTable && nowBelowTable && (onTableNow || onTablePrev);
+  // For fast diagonal shots, check if X was in bounds previously (but Z must still be in bounds NOW)
+  // This prevents long shots past the table end from being registered as valid bounces
+  const zInBounds = Math.abs(ballPos.z) <= TABLE_L / 2;
+  const xWasInBounds = Math.abs(prevX) <= TABLE_W / 2;
+  const onTablePrev = xWasInBounds && Math.abs(prevZ) <= TABLE_L / 2;
+  const tableBounce = ballVel.y < 0 && wasAboveTable && nowBelowTable && (onTableNow || (onTablePrev && zInBounds));
 
   if (tableBounce) {
     // Interpolate to find exact bounce position
