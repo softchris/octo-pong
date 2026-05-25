@@ -3892,50 +3892,63 @@ const TRAINING_LESSONS = [
 
 let trainingActive = false;
 let trainingLessonIndex = 0;
-let trainingPhase = 'demo'; // 'demo', 'try', 'success', 'complete'
+let trainingPhase = 'intro'; // 'intro', 'showme', 'try', 'success', 'complete'
 let trainingSuccessCount = 0;
 const TRAINING_REPS_NEEDED = 3;
-let trainingBallFeeder = 0; // timer to auto-feed balls
+let trainingDemoTimer = 0;
+let trainingAutoRacket = false; // true during "show me" — game controls the racket
 
 function startTraining() {
   hideTournamentScreen();
   trainingActive = true;
   trainingLessonIndex = 0;
-  trainingPhase = 'demo';
+  trainingPhase = 'intro';
   trainingSuccessCount = 0;
+  trainingAutoRacket = false;
   currentArena = 'club';
   applyArena('club');
   document.getElementById('training-overlay').style.display = '';
   playerScore = 0;
   oppScore = 0;
   updateScoreboard();
-  startTrainingLesson();
+  gameState = 'point-pause';
+  renderTrainingHUD();
 }
 
 function startTrainingLesson() {
-  trainingPhase = 'demo';
+  trainingPhase = 'intro';
   trainingSuccessCount = 0;
-  trainingBallFeeder = 0;
-  renderTrainingHUD();
-  // Pause briefly to show the instruction, then start feeding balls
+  trainingAutoRacket = false;
   gameState = 'point-pause';
-  setTimeout(() => {
-    trainingPhase = 'try';
-    renderTrainingHUD();
-    feedTrainingBall();
-  }, 2500);
+  renderTrainingHUD();
 }
 
 function renderTrainingHUD() {
   const lesson = TRAINING_LESSONS[trainingLessonIndex];
   const hud = document.getElementById('training-hud');
 
-  if (trainingPhase === 'demo') {
+  if (trainingPhase === 'intro') {
+    const dots = TRAINING_LESSONS.map((_, i) => {
+      if (i < trainingLessonIndex) return '<div class="training-dot done"></div>';
+      if (i === trainingLessonIndex) return '<div class="training-dot active"></div>';
+      return '<div class="training-dot"></div>';
+    }).join('');
+
     hud.innerHTML = `
       <div class="training-title">${lesson.emoji} ${lesson.name}</div>
       <div class="training-instruction">${lesson.instruction}</div>
       <div class="training-gesture-demo">${lesson.demo}</div>
       <div class="training-instruction" style="color:#ffd54f;font-size:12px;margin-top:6px;">${lesson.tip}</div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+        <button class="tourney-btn" onclick="trainingShowMe()" style="pointer-events:auto;padding:10px 20px;font-size:14px;">👀 Show Me</button>
+        <button class="tourney-btn secondary" onclick="trainingStartTry()" style="pointer-events:auto;padding:10px 20px;font-size:14px;">🏓 Let Me Try</button>
+      </div>
+      <div class="training-progress" style="margin-top:10px;">${dots}</div>
+    `;
+  } else if (trainingPhase === 'showme') {
+    hud.innerHTML = `
+      <div class="training-title">👀 Watch the ${lesson.name}...</div>
+      <div class="training-instruction">See how the racket moves for a ${lesson.name.toLowerCase()}</div>
     `;
   } else if (trainingPhase === 'try') {
     const dots = TRAINING_LESSONS.map((_, i) => {
@@ -3949,11 +3962,14 @@ function renderTrainingHUD() {
     ).join('');
 
     hud.innerHTML = `
-      <div class="training-title">Now you try! ${lesson.emoji} ${lesson.name}</div>
+      <div class="training-title">Your turn! ${lesson.emoji} ${lesson.name}</div>
       <div class="training-instruction">${lesson.instruction}</div>
       <div style="margin:8px 0 4px;color:rgba(255,255,255,0.5);font-size:11px;">Successful ${lesson.name}s:</div>
       <div class="training-progress">${reps}</div>
       <div class="training-progress" style="margin-top:10px;">${dots}</div>
+      <div style="margin-top:8px;">
+        <button class="tourney-btn secondary" onclick="trainingShowMe()" style="pointer-events:auto;padding:6px 14px;font-size:12px;">👀 Show Me Again</button>
+      </div>
     `;
   } else if (trainingPhase === 'complete') {
     hud.innerHTML = `
@@ -3966,35 +3982,93 @@ function renderTrainingHUD() {
   }
 }
 
-function feedTrainingBall() {
-  if (!trainingActive || trainingPhase !== 'try') return;
-  // Place ball on opponent side coming toward player at a lofty arc
+function trainingShowMe() {
+  trainingPhase = 'showme';
+  trainingAutoRacket = true;
+  renderTrainingHUD();
+  // Feed a ball and let the game auto-play the stroke
+  feedTrainingBall();
   const lesson = TRAINING_LESSONS[trainingLessonIndex];
-  ballPos.x = (Math.random() - 0.5) * TABLE_W * 0.4;
+  // Schedule the auto-hit after ball reaches player side
+  trainingDemoTimer = setTimeout(() => {
+    performDemoStroke(lesson.id);
+  }, 800);
+}
+
+function performDemoStroke(gestureId) {
+  if (!trainingActive || trainingPhase !== 'showme') return;
+  const lesson = TRAINING_LESSONS.find(l => l.id === gestureId);
+
+  // Move racket to ball
+  racketPos.x = ballPos.x;
+  racketPos.z = Math.max(ballPos.z, 0.5);
+
+  // Simulate the gesture motion visually
+  if (gestureId === 'block') {
+    // Barely move — just place racket
+    racketSpeed = 0.5;
+    racketInstantSpeed = 0.5;
+    racketVelX = 0; racketVelZ = 0;
+    showGestureCallout('🛡️ Block');
+  } else if (gestureId === 'flick') {
+    // Quick lateral snap
+    racketSpeed = 8;
+    racketInstantSpeed = 8;
+    racketVelX = 10; racketVelZ = -3;
+    showGestureCallout('⚡ Flick!');
+  } else if (gestureId === 'loop') {
+    // Forward curving motion
+    racketSpeed = 5;
+    racketInstantSpeed = 5;
+    racketVelX = 2; racketVelZ = -6;
+    showGestureCallout('🔄 Loop!');
+  } else if (gestureId === 'chop') {
+    // Pulling back motion
+    racketSpeed = 4;
+    racketInstantSpeed = 4;
+    racketVelX = 1; racketVelZ = 4;
+    showGestureCallout('↩️ Chop!');
+  }
+
+  // Force the gesture type for the demo hit
+  motionGesture = gestureId;
+  playerHit();
+
+  showTrainingResult('👀 ' + lesson.emoji + ' ' + lesson.name);
+
+  // After demo, go back to intro (or try if they already saw it)
+  setTimeout(() => {
+    trainingAutoRacket = false;
+    trainingPhase = 'intro';
+    gameState = 'point-pause';
+    renderTrainingHUD();
+  }, 2000);
+}
+
+function trainingStartTry() {
+  trainingPhase = 'try';
+  trainingAutoRacket = false;
+  renderTrainingHUD();
+  feedTrainingBall();
+}
+
+function feedTrainingBall() {
+  if (!trainingActive) return;
+  // Place ball on opponent side, arc it toward player
+  const lesson = TRAINING_LESSONS[trainingLessonIndex];
+  ballPos.x = (Math.random() - 0.5) * TABLE_W * 0.3;
   ballPos.y = TABLE_H + 0.3;
   ballPos.z = -(TABLE_L / 2) * 0.3;
 
-  // Vary ball speed/arc based on lesson
+  // Ball comes toward player at varying speeds per lesson
   if (lesson.id === 'block') {
-    // Fast, flat ball — player should just block
-    ballVel.x = (Math.random() - 0.5) * 1.0;
-    ballVel.y = 1.5;
-    ballVel.z = 4.5;
+    ballVel.x = (Math.random() - 0.5) * 0.8; ballVel.y = 1.5; ballVel.z = 4.5;
   } else if (lesson.id === 'flick') {
-    // Medium speed, low arc
-    ballVel.x = (Math.random() - 0.5) * 0.8;
-    ballVel.y = 2.0;
-    ballVel.z = 3.0;
+    ballVel.x = (Math.random() - 0.5) * 0.6; ballVel.y = 2.0; ballVel.z = 3.0;
   } else if (lesson.id === 'loop') {
-    // Slow, high arc — perfect for looping
-    ballVel.x = (Math.random() - 0.5) * 0.5;
-    ballVel.y = 3.0;
-    ballVel.z = 2.5;
+    ballVel.x = (Math.random() - 0.5) * 0.4; ballVel.y = 3.0; ballVel.z = 2.5;
   } else if (lesson.id === 'chop') {
-    // Medium height, moderate speed
-    ballVel.x = (Math.random() - 0.5) * 0.6;
-    ballVel.y = 2.5;
-    ballVel.z = 3.0;
+    ballVel.x = (Math.random() - 0.5) * 0.5; ballVel.y = 2.5; ballVel.z = 3.0;
   }
 
   ballSpin = { x: 0, y: 0, z: 0 };
@@ -4014,7 +4088,6 @@ function checkTrainingGesture() {
     renderTrainingHUD();
 
     if (trainingSuccessCount >= TRAINING_REPS_NEEDED) {
-      // Lesson complete — move to next
       trainingPhase = 'success';
       setTimeout(() => {
         trainingLessonIndex++;
@@ -4028,19 +4101,18 @@ function checkTrainingGesture() {
         }
       }, 1200);
     } else {
-      // Feed another ball after a short pause
       gameState = 'point-pause';
       setTimeout(() => feedTrainingBall(), 1000);
     }
   } else if (motionGesture !== 'neutral') {
-    // Wrong gesture
     showTrainingResult('❌ That was a ' + motionGesture + ' — try ' + lesson.name + '!');
     gameState = 'point-pause';
     setTimeout(() => feedTrainingBall(), 1200);
   } else {
-    // Neutral/no gesture — just feed again
+    // No special gesture detected — encourage them
+    showTrainingResult('Try a more deliberate ' + lesson.name + ' motion!');
     gameState = 'point-pause';
-    setTimeout(() => feedTrainingBall(), 800);
+    setTimeout(() => feedTrainingBall(), 1000);
   }
 }
 
