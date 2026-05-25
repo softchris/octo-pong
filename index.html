@@ -1249,8 +1249,8 @@ const BADGES = {
   winStreak3:     { id: 'winStreak3',     emoji: '🔥', name: 'On Fire',             desc: 'Win 3 matches in a row' },
   winStreak5:     { id: 'winStreak5',     emoji: '🔥', name: 'Unstoppable',         desc: 'Win 5 matches in a row' },
   tourneyChamp:   { id: 'tourneyChamp',   emoji: '🏆', name: 'World Champion',      desc: 'Win a tournament' },
-  perfectGame:    { id: 'perfectGame',    emoji: '✨', name: 'Perfect Game',        desc: 'Win a match 11-0' },
-  comeback:       { id: 'comeback',       emoji: '💪', name: 'Comeback Kid',        desc: 'Win after being down 5+ points' },
+  perfectGame:    { id: 'perfectGame',    emoji: '✨', name: 'Perfect Game',        desc: 'Win a match without losing a point' },
+  comeback:       { id: 'comeback',       emoji: '💪', name: 'Comeback Kid',        desc: 'Win after being down 3+ points' },
   tenWins:        { id: 'tenWins',        emoji: '⭐', name: 'Rising Star',         desc: 'Win 10 matches' },
   fiftyWins:      { id: 'fiftyWins',      emoji: '🌟', name: 'Veteran',             desc: 'Win 50 matches' },
   hundredWins:    { id: 'hundredWins',    emoji: '👑', name: 'Legend',              desc: 'Win 100 matches' },
@@ -1261,8 +1261,8 @@ const BADGES = {
   spinMaster:     { id: 'spinMaster',     emoji: '🌀', name: 'Spin Master',         desc: 'Win a match using only topspin' },
   backspinPro:    { id: 'backspinPro',    emoji: '↩️', name: 'Backspin Pro',        desc: 'Win a match using only backspin' },
   giantKiller:    { id: 'giantKiller',    emoji: '🐉', name: 'Giant Killer',        desc: 'Beat an opponent rated 90+' },
-  aceCollector:   { id: 'aceCollector',   emoji: '🎯', name: 'Ace Collector',       desc: 'Score 5 aces in one match' },
-  marathonMan:    { id: 'marathonMan',    emoji: '🏃', name: 'Marathon Rally',      desc: 'Win a rally with 20+ hits' },
+  aceCollector:   { id: 'aceCollector',   emoji: '🎯', name: 'Ace Collector',       desc: 'Score 3 aces in one match' },
+  marathonMan:    { id: 'marathonMan',    emoji: '🏃', name: 'Marathon Rally',      desc: 'Win a rally with 15+ hits' },
   firstSpecial:   { id: 'firstSpecial',   emoji: '⚡', name: 'Special Talent',      desc: 'Unlock your first special shot' },
   allSpecials:    { id: 'allSpecials',    emoji: '🌈', name: 'Full Arsenal',        desc: 'Unlock all special shots' },
 };
@@ -1460,17 +1460,17 @@ function checkWinBadges() {
   if (winStreak >= 3) awardBadge('winStreak3');
   if (winStreak >= 5) awardBadge('winStreak5');
 
-  // Perfect game
-  if (oppScore === 0 && playerScore >= 11) awardBadge('perfectGame');
+  // Perfect game — won without opponent scoring
+  if (oppScore === 0 && playerScore >= WINNING_SCORE) awardBadge('perfectGame');
 
-  // Comeback
-  if (matchMaxDeficit >= 5) awardBadge('comeback');
+  // Comeback — was down 3+ points and still won
+  if (matchMaxDeficit >= 3) awardBadge('comeback');
 
   // Giant killer — check opponent rating
   if (activeOpponent && getOverallRating(activeOpponent) >= 90) awardBadge('giantKiller');
 
   // Ace collector
-  if (matchAceCount >= 5) awardBadge('aceCollector');
+  if (matchAceCount >= 3) awardBadge('aceCollector');
 
   // Spin-only badges
   if (matchSpinsUsed.size === 1 && matchSpinsUsed.has('top')) awardBadge('spinMaster');
@@ -1535,7 +1535,13 @@ function showSmashPrompt() {
   if (smashPromptActive || gameState !== 'play') return;
   smashPromptActive = true;
   savedTimeScaleBeforeSmash = gameTimeScale;
-  gameTimeScale = 0.4; // slow-mo 40%
+  // Fully freeze the game so the ball stays in place
+  gameTimeScale = 0;
+  // Save ball state so we can restore it exactly
+  window._smashFrozenBall = {
+    x: ballPos.x, y: ballPos.y, z: ballPos.z,
+    vx: ballVel.x, vy: ballVel.y, vz: ballVel.z
+  };
   document.getElementById('smash-prompt').style.display = '';
 }
 
@@ -1554,6 +1560,13 @@ function declineSmash() {
   if (!smashPromptActive) return;
   smashPromptActive = false;
   document.getElementById('smash-prompt').style.display = 'none';
+  // Restore ball state and resume
+  if (window._smashFrozenBall) {
+    const fb = window._smashFrozenBall;
+    ballPos.x = fb.x; ballPos.y = fb.y; ballPos.z = fb.z;
+    ballVel.x = fb.vx; ballVel.y = fb.vy; ballVel.z = fb.vz;
+    window._smashFrozenBall = null;
+  }
   gameTimeScale = 1.0;
   smashPromptCooldown = 3.0;
 }
@@ -1600,6 +1613,14 @@ function executeAimedSmash() {
   document.getElementById('smash-aim-overlay').style.display = 'none';
   document.getElementById('smash-reticle').style.display = 'none';
   gameTimeScale = 1.0; // fully resume
+
+  // Restore frozen ball position (ball was frozen since prompt)
+  if (window._smashFrozenBall) {
+    const fb = window._smashFrozenBall;
+    ballPos.x = fb.x; ballPos.y = fb.y; ballPos.z = fb.z;
+    // Don't restore velocity — we'll override it in playerHit
+    window._smashFrozenBall = null;
+  }
 
   // Store aim target
   window._smashAimX = smashAimTarget.x;
@@ -4146,7 +4167,7 @@ function scorePoint(scorer, reason, fromDeadBall) {
     // Badge tracking: ace (opponent missed serve return)
     if (reason && reason.toLowerCase().includes('ace')) matchAceCount++;
     // Badge tracking: marathon rally
-    if (matchRallyHits >= 20) awardBadge('marathonMan');
+    if (matchRallyHits >= 15) awardBadge('marathonMan');
   } else {
     oppScore++;
     document.getElementById('opp-score').textContent = oppScore;
@@ -4609,7 +4630,7 @@ function playerHit() {
   if (isSmash) {
     lastShotWasSmash = true;
     // Aimed smash: calculate trajectory to the chosen target spot
-    const netTop = TABLE_H + NET_H;
+    const netTop = TABLE_H + NET_H + 0.05;
     const ballHeight = ballPos.y;
     const heightAboveNet = ballHeight - netTop;
     const smashPower = power * 3.0 * powerBoost;
@@ -4626,38 +4647,37 @@ function playerHit() {
     window._smashAimX = undefined;
     window._smashAimZ = undefined;
 
-    // Calculate physics to land at target — fast flight time for smash
-    const flightTime = heightAboveNet > 0.3 ? 0.35 : 0.45;
+    // Calculate physics to land at target — guaranteed to clear net and hit table
     const dx = targetX - ballPos.x;
     const dz = targetZ - ballPos.z;
     const dy = TABLE_H - ballPos.y; // land at table height
+
+    // Calculate minimum flight time for net clearance
+    const tNet = Math.abs(ballPos.z) > 0.01 ? Math.abs(ballPos.z / (dz / 0.35)) : 0.15;
+
+    // Use a flight time that gives a fast but reliable trajectory
+    const flightTime = 0.38;
     ballVel.x = dx / flightTime;
     ballVel.z = dz / flightTime;
+
+    // Calculate y velocity to land at table, then check net clearance
     ballVel.y = (dy - 0.5 * GRAVITY * flightTime * flightTime) / flightTime;
 
-    // Net clearance boost
-    if (ballVel.z < 0) {
-      const tNet = -ballPos.z / ballVel.z;
-      if (tNet > 0 && tNet < flightTime) {
-        const yAtNet = ballPos.y + ballVel.y * tNet + 0.5 * GRAVITY * tNet * tNet;
-        if (yAtNet < netTop + 0.08) {
-          ballVel.y = (netTop + 0.12 - ballPos.y - 0.5 * GRAVITY * tNet * tNet) / tNet;
+    // Verify net clearance and adjust if needed
+    if (dz < 0) {
+      const tNetCross = -ballPos.z / ballVel.z;
+      if (tNetCross > 0 && tNetCross < flightTime) {
+        const yAtNet = ballPos.y + ballVel.y * tNetCross + 0.5 * GRAVITY * tNetCross * tNetCross;
+        if (yAtNet < netTop) {
+          // Boost y to clear the net with margin
+          ballVel.y = (netTop + 0.06 - ballPos.y - 0.5 * GRAVITY * tNetCross * tNetCross) / tNetCross;
         }
       }
     }
 
-    if (heightAboveNet > 0.3) {
-      showSmashCallout('💥 SMASH!');
-      triggerScreenShake(0.2, 0.3);
-    } else if (heightAboveNet > 0.0) {
-      showSmashCallout('💥 SMASH!');
-      triggerScreenShake(0.12, 0.2);
-    } else {
-      // Ball is too low — smash goes into the net
-      ballVel.z = -(2.0 + smashPower * 1.0);
-      ballVel.y = -(0.8 + Math.abs(heightAboveNet) * 1.5);
-      showShotIndicator('💥 Smash... into the net! 😬', 1200);
-    }
+    // Always show smash callout — aimed smashes are guaranteed to land
+    showSmashCallout('💥 SMASH!');
+    triggerScreenShake(0.2, 0.3);
   } else {
     const speedZ = -(2.5 + distFactor * 1.5 + power * (2.0 + distFactor * 3.5) * distFactor) * powerBoost;
     ballVel.z = speedZ;
@@ -5303,10 +5323,10 @@ function animate() {
   if (gameState === 'play' && !smashPromptActive && !smashAutopilot && !smashAiming && smashPromptCooldown <= 0) {
     // Ball must be well above net, coming toward player, on player's side
     const netTop = TABLE_H + NET_H;
-    const highEnough = ballPos.y > netTop + 0.25; // must be clearly above the net
+    const highEnough = ballPos.y > netTop + 0.15; // detect smash earlier
     const comingToPlayer = ballVel.z > 0;
-    const onPlayerSide = ballPos.z > 0.3;
-    const notTooFast = Math.abs(ballVel.z) < 6; // slow enough to react
+    const onPlayerSide = ballPos.z > -0.5; // detect earlier, even as ball crosses net
+    const notTooFast = Math.abs(ballVel.z) < 8; // wider window to react
     if (highEnough && comingToPlayer && onPlayerSide && notTooFast) {
       showSmashPrompt();
     }
