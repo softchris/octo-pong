@@ -3892,25 +3892,24 @@ const TRAINING_LESSONS = [
 
 let trainingActive = false;
 let trainingLessonIndex = 0;
-let trainingPhase = 'intro'; // 'intro', 'showme', 'try', 'success', 'complete'
+let trainingPhase = 'menu'; // 'menu', 'intro', 'showme', 'try', 'success', 'complete'
 let trainingSuccessCount = 0;
 const TRAINING_REPS_NEEDED = 3;
 let trainingDemoTimer = 0;
-let trainingAutoRacket = false; // true during "show me" — game controls the racket
+let trainingAutoRacket = false;
 
 function startTraining() {
   hideTournamentScreen();
   trainingActive = true;
-  trainingLessonIndex = 0;
-  trainingPhase = 'intro';
+  trainingPhase = 'menu';
   trainingSuccessCount = 0;
   trainingAutoRacket = false;
   currentArena = 'club';
   applyArena('club');
   document.getElementById('training-overlay').style.display = '';
-  playerScore = 0;
-  oppScore = 0;
-  updateScoreboard();
+  playerScore = 0; oppScore = 0;
+  document.getElementById('player-score').textContent = '0';
+  document.getElementById('opp-score').textContent = '0';
   gameState = 'point-pause';
   renderTrainingHUD();
 }
@@ -3924,26 +3923,39 @@ function startTrainingLesson() {
 }
 
 function renderTrainingHUD() {
-  const lesson = TRAINING_LESSONS[trainingLessonIndex];
   const hud = document.getElementById('training-hud');
 
-  if (trainingPhase === 'intro') {
-    const dots = TRAINING_LESSONS.map((_, i) => {
-      if (i < trainingLessonIndex) return '<div class="training-dot done"></div>';
-      if (i === trainingLessonIndex) return '<div class="training-dot active"></div>';
-      return '<div class="training-dot"></div>';
-    }).join('');
+  if (trainingPhase === 'menu') {
+    hud.innerHTML = `
+      <div class="training-title">🎓 Training Center</div>
+      <div class="training-instruction">Choose a technique to practice</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+        ${TRAINING_LESSONS.map((l, i) => `
+          <button class="tourney-btn secondary" onclick="selectTrainingLesson(${i})" style="pointer-events:auto;padding:10px 16px;font-size:14px;text-align:left;">
+            <span style="font-size:20px;margin-right:8px;">${l.emoji}</span>${l.name}
+            <span style="color:rgba(255,255,255,0.4);font-size:11px;margin-left:8px;">— ${l.tip.split('.')[0]}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    return;
+  }
 
+  const lesson = TRAINING_LESSONS[trainingLessonIndex];
+
+  if (trainingPhase === 'intro') {
     hud.innerHTML = `
       <div class="training-title">${lesson.emoji} ${lesson.name}</div>
       <div class="training-instruction">${lesson.instruction}</div>
       <div class="training-gesture-demo">${lesson.demo}</div>
       <div class="training-instruction" style="color:#ffd54f;font-size:12px;margin-top:6px;">${lesson.tip}</div>
-      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
         <button class="tourney-btn" onclick="trainingShowMe()" style="pointer-events:auto;padding:10px 20px;font-size:14px;">👀 Show Me</button>
         <button class="tourney-btn secondary" onclick="trainingStartTry()" style="pointer-events:auto;padding:10px 20px;font-size:14px;">🏓 Let Me Try</button>
       </div>
-      <div class="training-progress" style="margin-top:10px;">${dots}</div>
+      <div style="margin-top:8px;">
+        <button class="tourney-btn secondary" onclick="trainingBackToMenu()" style="pointer-events:auto;padding:6px 14px;font-size:12px;">← Back</button>
+      </div>
     `;
   } else if (trainingPhase === 'showme') {
     hud.innerHTML = `
@@ -3951,12 +3963,6 @@ function renderTrainingHUD() {
       <div class="training-instruction">See how the racket moves for a ${lesson.name.toLowerCase()}</div>
     `;
   } else if (trainingPhase === 'try') {
-    const dots = TRAINING_LESSONS.map((_, i) => {
-      if (i < trainingLessonIndex) return '<div class="training-dot done"></div>';
-      if (i === trainingLessonIndex) return '<div class="training-dot active"></div>';
-      return '<div class="training-dot"></div>';
-    }).join('');
-
     const reps = Array.from({ length: TRAINING_REPS_NEEDED }, (_, i) =>
       `<div class="training-dot ${i < trainingSuccessCount ? 'done' : ''}" style="width:14px;height:14px;"></div>`
     ).join('');
@@ -3966,20 +3972,34 @@ function renderTrainingHUD() {
       <div class="training-instruction">${lesson.instruction}</div>
       <div style="margin:8px 0 4px;color:rgba(255,255,255,0.5);font-size:11px;">Successful ${lesson.name}s:</div>
       <div class="training-progress">${reps}</div>
-      <div class="training-progress" style="margin-top:10px;">${dots}</div>
-      <div style="margin-top:8px;">
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:center;">
         <button class="tourney-btn secondary" onclick="trainingShowMe()" style="pointer-events:auto;padding:6px 14px;font-size:12px;">👀 Show Me Again</button>
+        <button class="tourney-btn secondary" onclick="trainingBackToMenu()" style="pointer-events:auto;padding:6px 14px;font-size:12px;">← Back</button>
       </div>
     `;
   } else if (trainingPhase === 'complete') {
     hud.innerHTML = `
-      <div class="training-title">🎉 Training Complete!</div>
-      <div class="training-instruction">You've mastered all the basic techniques!</div>
-      <div style="margin-top:12px;">
-        <button class="tourney-btn" onclick="exitTraining()" style="pointer-events:auto;">🏓 Back to Menu</button>
+      <div class="training-title">🎉 ${lesson.name} Mastered!</div>
+      <div class="training-instruction">Great job! Try another technique or exit.</div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;">
+        <button class="tourney-btn" onclick="trainingBackToMenu()" style="pointer-events:auto;">📋 More Lessons</button>
+        <button class="tourney-btn secondary" onclick="exitTraining()" style="pointer-events:auto;">🏓 Back to Menu</button>
       </div>
     `;
   }
+}
+
+function selectTrainingLesson(index) {
+  trainingLessonIndex = index;
+  startTrainingLesson();
+}
+
+function trainingBackToMenu() {
+  trainingPhase = 'menu';
+  trainingAutoRacket = false;
+  gameState = 'point-pause';
+  if (trainingDemoTimer) { clearTimeout(trainingDemoTimer); trainingDemoTimer = 0; }
+  renderTrainingHUD();
 }
 
 function trainingShowMe() {
@@ -4088,18 +4108,15 @@ function checkTrainingGesture() {
     renderTrainingHUD();
 
     if (trainingSuccessCount >= TRAINING_REPS_NEEDED) {
-      trainingPhase = 'success';
-      setTimeout(() => {
-        trainingLessonIndex++;
-        if (trainingLessonIndex >= TRAINING_LESSONS.length) {
-          trainingPhase = 'complete';
-          renderTrainingHUD();
-          gameState = 'point-pause';
-          awardBadge('trainingComplete');
-        } else {
-          startTrainingLesson();
-        }
-      }, 1200);
+      trainingPhase = 'complete';
+      gameState = 'point-pause';
+      renderTrainingHUD();
+      // Award badge if all lessons have been completed at least once
+      if (!window._trainingCompleted) window._trainingCompleted = new Set();
+      window._trainingCompleted.add(lesson.id);
+      if (window._trainingCompleted.size >= TRAINING_LESSONS.length) {
+        awardBadge('trainingComplete');
+      }
     } else {
       gameState = 'point-pause';
       setTimeout(() => feedTrainingBall(), 1000);
