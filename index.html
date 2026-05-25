@@ -828,6 +828,58 @@
   .trophy-text { color: #ffd700; font-size: 24px; font-weight: 800; margin: 16px 0 8px; }
   .trophy-sub { color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 24px; }
 
+  /* Training mode */
+  .training-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 500; pointer-events: none;
+  }
+  .training-hud {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,10,30,0.92); border: 2px solid rgba(100,200,255,0.4);
+    border-radius: 16px; padding: 12px 20px; text-align: center;
+    color: #fff; pointer-events: auto; max-width: 90vw;
+    box-shadow: 0 0 30px rgba(100,200,255,0.2);
+  }
+  .training-title { font-size: 18px; font-weight: 800; color: #4fc3f7; margin-bottom: 4px; }
+  .training-instruction { font-size: 14px; color: rgba(255,255,255,0.8); margin-bottom: 8px; }
+  .training-gesture-demo {
+    display: inline-block; padding: 6px 16px; border-radius: 20px;
+    background: rgba(100,200,255,0.15); border: 1px solid rgba(100,200,255,0.3);
+    font-size: 24px; margin: 6px 0;
+  }
+  .training-progress {
+    display: flex; gap: 6px; justify-content: center; margin-top: 8px;
+  }
+  .training-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); transition: background 0.3s;
+  }
+  .training-dot.done { background: #4fc3f7; }
+  .training-dot.active { background: #ffd54f; animation: dotPulse 1s infinite; }
+  @keyframes dotPulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.4); } }
+  .training-result {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 42px; font-weight: 900; color: #4fc3f7; pointer-events: none;
+    text-shadow: 0 0 20px rgba(100,200,255,0.8); opacity: 0;
+  }
+  .training-result.show {
+    opacity: 1; animation: trainingPop 1s ease-out forwards;
+  }
+  @keyframes trainingPop {
+    0% { opacity:0; transform:translate(-50%,-50%) scale(0.5); }
+    20% { opacity:1; transform:translate(-50%,-50%) scale(1.1); }
+    40% { transform:translate(-50%,-50%) scale(0.95); }
+    60% { opacity:1; }
+    100% { opacity:0; transform:translate(-50%,-60%) scale(0.8); }
+  }
+  .training-skip {
+    position: absolute; bottom: 20px; right: 20px;
+    padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.6); font-size: 13px;
+    cursor: pointer; pointer-events: auto;
+  }
+  .training-skip:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
   .tourney-btn {
     padding: 14px 32px; border: 2px solid #ffd700; border-radius: 12px;
     background: rgba(255,215,0,0.15); color: #ffd700; font-size: 16px;
@@ -900,6 +952,11 @@
   <div id="shot-indicator"></div>
   <div id="smash-callout"></div>
   <div id="gesture-callout"></div>
+  <div id="training-overlay" class="training-overlay" style="display:none;">
+    <div class="training-hud" id="training-hud"></div>
+    <div class="training-result" id="training-result"></div>
+    <button class="training-skip" id="training-skip" onclick="exitTraining()">✕ Exit Training</button>
+  </div>
   <div id="smash-prompt" style="display:none;">
     <div class="smash-prompt-title">💥 SMASH OPPORTUNITY!</div>
     <div class="smash-prompt-buttons">
@@ -1291,6 +1348,7 @@ const BADGES = {
   marathonMan:    { id: 'marathonMan',    emoji: '🏃', name: 'Marathon Rally',      desc: 'Win a rally with 15+ hits' },
   firstSpecial:   { id: 'firstSpecial',   emoji: '⚡', name: 'Special Talent',      desc: 'Unlock your first special shot' },
   allSpecials:    { id: 'allSpecials',    emoji: '🌈', name: 'Full Arsenal',        desc: 'Unlock all special shots' },
+  trainingComplete: { id: 'trainingComplete', emoji: '🎓', name: 'Graduate',      desc: 'Complete all training lessons' },
 };
 
 let playerStats = { ...DEFAULT_PLAYER_STATS };
@@ -1439,6 +1497,7 @@ const BADGE_XP = {
   level5: 60, level10: 80, level20: 120, level30: 200,
   spinMaster: 80, backspinPro: 80, giantKiller: 120,
   aceCollector: 80, marathonMan: 80, firstSpecial: 50, allSpecials: 200,
+  trainingComplete: 100,
 };
 
 function awardBadge(badgeId) {
@@ -2196,6 +2255,7 @@ function renderTitleScreen(el) {
     <div style="font-size:48px; margin:20px 0;">🏆</div>
     <button class="tourney-btn" onclick="startTournament()">🌍 Start Tournament</button>
     <button class="tourney-btn secondary" onclick="startQuickPlay()">⚡ Quick Play</button>
+    <button class="tourney-btn secondary" onclick="startTraining()">🎓 Training</button>
     <button class="tourney-btn secondary" onclick="showPlayerProfileScreen()">👤 Player Profile</button>
     <button class="tourney-btn secondary" onclick="showBadgesScreen()">🎖️ Badges</button>
     <div class="progress-chip">
@@ -3801,6 +3861,205 @@ function analyzeMotionGesture() {
     motionGesture = 'neutral';
   }
 }
+
+// ─── TRAINING MODE ───
+const TRAINING_LESSONS = [
+  {
+    id: 'block', emoji: '🛡️', name: 'Block',
+    instruction: 'Hold your finger still on the ball. Barely move — just let the racket absorb the shot.',
+    demo: '🛡️ Keep still',
+    tip: 'A block returns the ball softly. Great for defense against fast shots.',
+  },
+  {
+    id: 'flick', emoji: '⚡', name: 'Wrist Flick',
+    instruction: 'Make a quick, snappy swipe right as the ball arrives. Short and fast!',
+    demo: '⚡ Quick snap →',
+    tip: 'Flicks are fast and flat. Perfect for catching opponents off guard at the net.',
+  },
+  {
+    id: 'loop', emoji: '🔄', name: 'Topspin Loop',
+    instruction: 'Swipe in a curved upward arc toward the net. Like brushing over the ball.',
+    demo: '🔄 Curve forward ↗',
+    tip: 'Loops add heavy topspin. The ball dips down after crossing the net.',
+  },
+  {
+    id: 'chop', emoji: '↩️', name: 'Backspin Chop',
+    instruction: 'Swipe in a curve pulling away from the net. Brush under the ball.',
+    demo: '↩️ Curve back ↙',
+    tip: 'Chops add backspin. The ball floats and slows — great for changing pace.',
+  },
+];
+
+let trainingActive = false;
+let trainingLessonIndex = 0;
+let trainingPhase = 'demo'; // 'demo', 'try', 'success', 'complete'
+let trainingSuccessCount = 0;
+const TRAINING_REPS_NEEDED = 3;
+let trainingBallFeeder = 0; // timer to auto-feed balls
+
+function startTraining() {
+  hideTournamentScreen();
+  trainingActive = true;
+  trainingLessonIndex = 0;
+  trainingPhase = 'demo';
+  trainingSuccessCount = 0;
+  currentArena = 'club';
+  applyArena('club');
+  document.getElementById('training-overlay').style.display = '';
+  playerScore = 0;
+  oppScore = 0;
+  updateScoreboard();
+  startTrainingLesson();
+}
+
+function startTrainingLesson() {
+  trainingPhase = 'demo';
+  trainingSuccessCount = 0;
+  trainingBallFeeder = 0;
+  renderTrainingHUD();
+  // Pause briefly to show the instruction, then start feeding balls
+  gameState = 'point-pause';
+  setTimeout(() => {
+    trainingPhase = 'try';
+    renderTrainingHUD();
+    feedTrainingBall();
+  }, 2500);
+}
+
+function renderTrainingHUD() {
+  const lesson = TRAINING_LESSONS[trainingLessonIndex];
+  const hud = document.getElementById('training-hud');
+
+  if (trainingPhase === 'demo') {
+    hud.innerHTML = `
+      <div class="training-title">${lesson.emoji} ${lesson.name}</div>
+      <div class="training-instruction">${lesson.instruction}</div>
+      <div class="training-gesture-demo">${lesson.demo}</div>
+      <div class="training-instruction" style="color:#ffd54f;font-size:12px;margin-top:6px;">${lesson.tip}</div>
+    `;
+  } else if (trainingPhase === 'try') {
+    const dots = TRAINING_LESSONS.map((_, i) => {
+      if (i < trainingLessonIndex) return '<div class="training-dot done"></div>';
+      if (i === trainingLessonIndex) return '<div class="training-dot active"></div>';
+      return '<div class="training-dot"></div>';
+    }).join('');
+
+    const reps = Array.from({ length: TRAINING_REPS_NEEDED }, (_, i) =>
+      `<div class="training-dot ${i < trainingSuccessCount ? 'done' : ''}" style="width:14px;height:14px;"></div>`
+    ).join('');
+
+    hud.innerHTML = `
+      <div class="training-title">Now you try! ${lesson.emoji} ${lesson.name}</div>
+      <div class="training-instruction">${lesson.instruction}</div>
+      <div style="margin:8px 0 4px;color:rgba(255,255,255,0.5);font-size:11px;">Successful ${lesson.name}s:</div>
+      <div class="training-progress">${reps}</div>
+      <div class="training-progress" style="margin-top:10px;">${dots}</div>
+    `;
+  } else if (trainingPhase === 'complete') {
+    hud.innerHTML = `
+      <div class="training-title">🎉 Training Complete!</div>
+      <div class="training-instruction">You've mastered all the basic techniques!</div>
+      <div style="margin-top:12px;">
+        <button class="tourney-btn" onclick="exitTraining()" style="pointer-events:auto;">🏓 Back to Menu</button>
+      </div>
+    `;
+  }
+}
+
+function feedTrainingBall() {
+  if (!trainingActive || trainingPhase !== 'try') return;
+  // Place ball on opponent side coming toward player at a lofty arc
+  const lesson = TRAINING_LESSONS[trainingLessonIndex];
+  ballPos.x = (Math.random() - 0.5) * TABLE_W * 0.4;
+  ballPos.y = TABLE_H + 0.3;
+  ballPos.z = -(TABLE_L / 2) * 0.3;
+
+  // Vary ball speed/arc based on lesson
+  if (lesson.id === 'block') {
+    // Fast, flat ball — player should just block
+    ballVel.x = (Math.random() - 0.5) * 1.0;
+    ballVel.y = 1.5;
+    ballVel.z = 4.5;
+  } else if (lesson.id === 'flick') {
+    // Medium speed, low arc
+    ballVel.x = (Math.random() - 0.5) * 0.8;
+    ballVel.y = 2.0;
+    ballVel.z = 3.0;
+  } else if (lesson.id === 'loop') {
+    // Slow, high arc — perfect for looping
+    ballVel.x = (Math.random() - 0.5) * 0.5;
+    ballVel.y = 3.0;
+    ballVel.z = 2.5;
+  } else if (lesson.id === 'chop') {
+    // Medium height, moderate speed
+    ballVel.x = (Math.random() - 0.5) * 0.6;
+    ballVel.y = 2.5;
+    ballVel.z = 3.0;
+  }
+
+  ballSpin = { x: 0, y: 0, z: 0 };
+  playerSideBounces = 0;
+  oppSideBounces = 0;
+  lastHitter = 'opp';
+  gameState = 'play';
+}
+
+function checkTrainingGesture() {
+  if (!trainingActive || trainingPhase !== 'try') return;
+  const lesson = TRAINING_LESSONS[trainingLessonIndex];
+
+  if (motionGesture === lesson.id) {
+    trainingSuccessCount++;
+    showTrainingResult('✅ ' + lesson.emoji + ' ' + lesson.name + '!');
+    renderTrainingHUD();
+
+    if (trainingSuccessCount >= TRAINING_REPS_NEEDED) {
+      // Lesson complete — move to next
+      trainingPhase = 'success';
+      setTimeout(() => {
+        trainingLessonIndex++;
+        if (trainingLessonIndex >= TRAINING_LESSONS.length) {
+          trainingPhase = 'complete';
+          renderTrainingHUD();
+          gameState = 'point-pause';
+          awardBadge('trainingComplete');
+        } else {
+          startTrainingLesson();
+        }
+      }, 1200);
+    } else {
+      // Feed another ball after a short pause
+      gameState = 'point-pause';
+      setTimeout(() => feedTrainingBall(), 1000);
+    }
+  } else if (motionGesture !== 'neutral') {
+    // Wrong gesture
+    showTrainingResult('❌ That was a ' + motionGesture + ' — try ' + lesson.name + '!');
+    gameState = 'point-pause';
+    setTimeout(() => feedTrainingBall(), 1200);
+  } else {
+    // Neutral/no gesture — just feed again
+    gameState = 'point-pause';
+    setTimeout(() => feedTrainingBall(), 800);
+  }
+}
+
+function showTrainingResult(text) {
+  const el = document.getElementById('training-result');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1000);
+}
+
+function exitTraining() {
+  trainingActive = false;
+  document.getElementById('training-overlay').style.display = 'none';
+  gameState = 'point-pause';
+  showTournamentScreen('title');
+}
+
 let smashArmed = false;
 let smashLungeTimer = 0;
 let smashLungeZ = 0;
@@ -4290,6 +4549,12 @@ function serve(side) {
 
 // ─── POINT SCORING ───
 function scorePoint(scorer, reason, fromDeadBall) {
+  // Training mode: skip scoring, just feed another ball
+  if (trainingActive) {
+    gameState = 'point-pause';
+    setTimeout(() => feedTrainingBall(), 800);
+    return;
+  }
   if (scorer === 'player') {
     playerScore++;
     document.getElementById('player-score').textContent = playerScore;
@@ -5051,6 +5316,11 @@ function playerHit() {
   bouncedOnOppSide = false;
   playerSideBounces = 0;
   oppSideBounces = 0;
+
+  // Training mode: check if the gesture matched the lesson
+  if (trainingActive) {
+    checkTrainingGesture();
+  }
 }
 
 // ─── OPPONENT AI ───
@@ -5177,6 +5447,7 @@ function oppHit() {
 
 function updateOpponent(dt) {
   if (gameState !== 'play') return;
+  if (trainingActive) return; // no opponent during training
 
   const champ = window._activeChamp;
   // AI stats — champions use their stats, quick play uses moderate defaults
